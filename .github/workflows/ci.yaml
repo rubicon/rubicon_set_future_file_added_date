@@ -7,33 +7,50 @@ on:
     branches: [main]
 
 jobs:
+  lint:
+    name: Lint (shellcheck)
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - run: brew install shellcheck || true
+      - run: shellcheck rubicon_set_future_file_added_date.sh
+
+  format:
+    name: Format check (shfmt)
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - run: brew install shfmt || true
+      - run: shfmt -d .
+
+  test:
+    name: Tests (bats)
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - run: brew install bats-core || true
+      - run: bats test || echo "⚠️ No tests found — skipping."
+
   build:
     name: Build and Test
     runs-on: macos-latest
-
     permissions:
       contents: read
-
+    needs: [lint, format, test]
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
-      - name: Set up Homebrew tools
-        run: |
-          brew install shellcheck shfmt bats-core || true
-
-      - name: Lint (shellcheck)
-        run: shellcheck rubicon_set_future_file_added_date.sh
-
-      - name: Format check (shfmt)
-        run: |
-          shfmt -d .
-
-      - name: Tests (bats)
-        run: |
-          bats test || echo "⚠️ No tests found — skipping."
-
-      - name: Build complete
-        run: echo "✅ CI completed successfully on macOS."
+      - run: echo "✅ All checks passed. Build complete."
