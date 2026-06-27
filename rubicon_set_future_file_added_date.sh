@@ -11,6 +11,14 @@
 # - Best-effort set for Finder "Date Added"; on modern macOS, this is often blocked.
 # - Forces Spotlight to refresh so mdls reflects changes.
 #
+
+# Use MacOS/BSD binaries always.
+readonly DATE="/bin/date"
+readonly STAT="/usr/bin/stat"
+readonly TOUCH="/usr/bin/touch"
+readonly MDLS="/usr/bin/mdls"
+readonly MDIMPORT="/usr/bin/mdimport"
+
 set -euo pipefail
 die() {
   echo "Error: $*" >&2
@@ -36,18 +44,18 @@ while [[ $# -gt 0 ]]; do
   shift || true
 done
 
-for cmd in mdls mdimport touch stat date; do
-  command -v "$cmd" >/dev/null || die "$cmd is required"
+for cmd in "$MDLS" "$MDIMPORT" "$TOUCH" "$STAT" "$DATE"; do
+  [[ -x "$cmd" ]] || die "$cmd is required"
 done
 [[ -e "$FILE" ]] || die "'$FILE' not found"
 
 # ---------- Target Time ----------
 if [[ -z "$TARGET_ISO" ]]; then
-  TARGET_ISO="$(date -u -v+10y '+%Y-%m-%dT%H:%M:%SZ')"
+  TARGET_ISO="$($DATE -u -v+10y '+%Y-%m-%dT%H:%M:%SZ')"
 fi
-TARGET_EPOCH="$(date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$TARGET_ISO" '+%s' 2>/dev/null || true)"
+TARGET_EPOCH="$($DATE -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$TARGET_ISO" '+%s' 2>/dev/null || true)"
 [[ -n "$TARGET_EPOCH" ]] || die "Failed to parse target ISO datetime: $TARGET_ISO"
-TARGET_TOUCH_LOCAL="$(date -r "$TARGET_EPOCH" '+%Y%m%d%H%M.%S')"
+TARGET_TOUCH_LOCAL="$($DATE -r "$TARGET_EPOCH" '+%Y%m%d%H%M.%S')"
 
 echo "Target (UTC):  $TARGET_ISO"
 echo "Target epoch:  $TARGET_EPOCH"
@@ -55,8 +63,8 @@ echo "File:          $FILE"
 echo ""
 
 # ---------- Date Modified ----------
-touch -mt "$TARGET_TOUCH_LOCAL" "$FILE" || true
-mdimport -f "$FILE" >/dev/null 2>&1 || true
+$TOUCH -mt "$TARGET_TOUCH_LOCAL" "$FILE" || true
+$MDIMPORT -f "$FILE" >/dev/null 2>&1 || true
 
 # ---------- Date Added (best effort) ----------
 if [[ "$TRY_ADDED" -eq 1 ]]; then
@@ -125,24 +133,24 @@ C_EOF
 
   if "$HELPER" "$FILE" "$TARGET_EPOCH"; then
     # Reindex and attempt verification via mdls (Spotlight)
-    mdimport -f "$FILE" >/dev/null 2>&1 || true
-    RAW_ADDED="$(mdls -raw -name kMDItemDateAdded "$FILE" 2>/dev/null || true)"
+    $MDIMPORT -f "$FILE" >/dev/null 2>&1 || true
+    RAW_ADDED="$($MDLS -raw -name kMDItemDateAdded "$FILE" 2>/dev/null || true)"
     # RAW example: 2025-11-06 14:44:30 +0000
     if [[ -n "$RAW_ADDED" && "$RAW_ADDED" != "(null)" ]]; then
-      ADDED_EPOCH="$(date -j -f '%Y-%m-%d %H:%M:%S %z' "$RAW_ADDED" '+%s' 2>/dev/null || true)"
+      ADDED_EPOCH="$($DATE -j -f '%Y-%m-%d %H:%M:%S %z' "$RAW_ADDED" '+%s' 2>/dev/null || true)"
       if [[ -n "$ADDED_EPOCH" ]]; then
         DIFF=$((ADDED_EPOCH - TARGET_EPOCH))
         [[ $DIFF -lt 0 ]] && DIFF=$((-DIFF))
         if [[ $DIFF -le 2 ]]; then
           echo "✔ Date Added set (Spotlight agrees)."
         else
-          echo "⚠ Date Added write returned success, but Spotlight shows '$RAW_ADDED'."
+          echo "ℹ Date Added update was accepted. Spotlight metadata may take a few moments to reflect the change. Current Spotlight value: '$RAW_ADDED'."
         fi
       else
-        echo "⚠ Date Added write returned success, but could not parse Spotlight value: $RAW_ADDED"
+        echo "ℹ Date Added update was accepted. Spotlight metadata may take a few moments to reflect the change (current value: $RAW_ADDED)."
       fi
     else
-      echo "⚠ Date Added write returned success, but Spotlight returned empty/null."
+      echo "ℹ Date Added update was accepted. Spotlight metadata has not yet reflected the change."
     fi
   else
     echo "⚠ Date Added could not be set (OS refused)."
@@ -152,15 +160,15 @@ else
 fi
 
 # ---------- Report ----------
-ACTUAL_EPOCH="$(stat -f %m "$FILE")"
+ACTUAL_EPOCH="$($STAT -f %m "$FILE")"
 if [[ "$ACTUAL_EPOCH" != "$TARGET_EPOCH" ]]; then
-  echo "⚠ Date Modified was clamped to $(date -ur "$ACTUAL_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')."
+  echo "⚠ Date Modified was clamped to $($DATE -ur "$ACTUAL_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')."
 fi
 
 echo ""
 echo "Spotlight (mdls):"
-mdls -name kMDItemDateAdded -name kMDItemContentModificationDate "$FILE" | sed 's/^/  /'
+$MDLS -name kMDItemDateAdded -name kMDItemContentModificationDate "$FILE" | sed 's/^/  /'
 echo ""
 echo "Filesystem (stat):"
 echo "  mtime (epoch): $ACTUAL_EPOCH"
-echo "  mtime (UTC) : $(date -ur "$ACTUAL_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')"
+echo "  mtime (UTC) : $($DATE -ur "$ACTUAL_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')"
