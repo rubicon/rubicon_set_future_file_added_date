@@ -63,7 +63,14 @@ echo "File:          $FILE"
 echo ""
 
 # ---------- Date Modified ----------
-$TOUCH -mt "$TARGET_TOUCH_LOCAL" "$FILE" || true
+
+# Support symbolic links
+if [[ -L "$FILE" ]]; then
+    $TOUCH -h -mt "$TARGET_TOUCH_LOCAL" "$FILE"
+else
+    $TOUCH -mt "$TARGET_TOUCH_LOCAL" "$FILE"
+fi
+
 $MDIMPORT -f "$FILE" > /dev/null 2>&1 || true
 
 # ---------- Date Added (best effort) ----------
@@ -121,7 +128,17 @@ int main(int argc, char *argv[]) {
     reqbuf.added.tv_sec = (time_t)epoch;
     reqbuf.added.tv_nsec = 0;
 
-    if (setattrlist(path, &request, &reqbuf, sizeof(reqbuf), 0) != 0) {
+    int options = 0;
+
+    /* If the path is a symbolic link, operate on the link itself rather than
+     * following it to the target.
+     */
+    struct stat st;
+    if (lstat(path, &st) == 0 && S_ISLNK(st.st_mode)) {
+        options |= FSOPT_NOFOLLOW;
+    }
+
+    if (setattrlist(path, &request, &reqbuf, sizeof(reqbuf), options) != 0) {
         perror("setattrlist(ATTR_CMN_ADDEDTIME) failed");
         return 1;
     }
@@ -163,12 +180,21 @@ else
 fi
 
 # ---------- Report ----------
+# On macOS, stat reports the symbolic link itself by default.
+# The -L option would follow the link to its target.
 ACTUAL_EPOCH="$($STAT -f %m "$FILE")"
+
 if [[ "$ACTUAL_EPOCH" != "$TARGET_EPOCH" ]]; then
     echo "⚠ Date Modified was clamped to $($DATE -ur "$ACTUAL_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')."
 fi
 
-echo ""
+if [[ -L "$FILE" ]]; then
+    echo "ℹ '$FILE' is a symbolic link."
+    echo "  Spotlight reports the target's Content Modification Date."
+    echo "  Date Added and filesystem mtime are verified on the link itself."
+    echo ""
+fi
+
 echo "Spotlight (mdls):"
 $MDLS -name kMDItemDateAdded -name kMDItemContentModificationDate "$FILE" | sed 's/^/  /'
 echo ""
