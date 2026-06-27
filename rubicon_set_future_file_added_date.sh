@@ -12,18 +12,26 @@
 # - Forces Spotlight to refresh so mdls reflects changes.
 #
 set -euo pipefail
-die(){ echo "Error: $*" >&2; exit 1; }
+die() {
+  echo "Error: $*" >&2
+  exit 1
+}
 
 [[ $# -ge 1 ]] || die "Usage: $0 <file> [--date ISO8601_UTC] [--no-added]"
-FILE=$1; shift || true
+FILE=$1
+shift || true
 TRY_ADDED=1
 TARGET_ISO=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --date) shift; TARGET_ISO="${1:-}"; [[ -n "$TARGET_ISO" ]] || die "--date requires an ISO8601 UTC like 2035-11-06T14:29:09Z" ;;
-    --no-added) TRY_ADDED=0 ;;
-    *) die "Unknown arg: $1" ;;
+  --date)
+    shift
+    TARGET_ISO="${1:-}"
+    [[ -n "$TARGET_ISO" ]] || die "--date requires an ISO8601 UTC like 2035-11-06T14:29:09Z"
+    ;;
+  --no-added) TRY_ADDED=0 ;;
+  *) die "Unknown arg: $1" ;;
   esac
   shift || true
 done
@@ -123,8 +131,8 @@ C_EOF
     if [[ -n "$RAW_ADDED" && "$RAW_ADDED" != "(null)" ]]; then
       ADDED_EPOCH="$(date -j -f '%Y-%m-%d %H:%M:%S %z' "$RAW_ADDED" '+%s' 2>/dev/null || true)"
       if [[ -n "$ADDED_EPOCH" ]]; then
-        DIFF=$(( ADDED_EPOCH - TARGET_EPOCH ))
-        [[ $DIFF -lt 0 ]] && DIFF=$(( -DIFF ))
+        DIFF=$((ADDED_EPOCH - TARGET_EPOCH))
+        [[ $DIFF -lt 0 ]] && DIFF=$((-DIFF))
         if [[ $DIFF -le 2 ]]; then
           echo "✔ Date Added set (Spotlight agrees)."
         else
