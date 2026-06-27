@@ -21,8 +21,8 @@ readonly MDIMPORT="/usr/bin/mdimport"
 
 set -euo pipefail
 die() {
-  echo "Error: $*" >&2
-  exit 1
+    echo "Error: $*" >&2
+    exit 1
 }
 
 [[ $# -ge 1 ]] || die "Usage: $0 <file> [--date ISO8601_UTC] [--no-added]"
@@ -32,28 +32,28 @@ TRY_ADDED=1
 TARGET_ISO=""
 
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-  --date)
-    shift
-    TARGET_ISO="${1:-}"
-    [[ -n "$TARGET_ISO" ]] || die "--date requires an ISO8601 UTC like 2035-11-06T14:29:09Z"
-    ;;
-  --no-added) TRY_ADDED=0 ;;
-  *) die "Unknown arg: $1" ;;
-  esac
-  shift || true
+    case "$1" in
+        --date)
+            shift
+            TARGET_ISO="${1:-}"
+            [[ -n "$TARGET_ISO" ]] || die "--date requires an ISO8601 UTC like 2035-11-06T14:29:09Z"
+            ;;
+        --no-added) TRY_ADDED=0 ;;
+        *) die "Unknown arg: $1" ;;
+    esac
+    shift || true
 done
 
 for cmd in "$MDLS" "$MDIMPORT" "$TOUCH" "$STAT" "$DATE"; do
-  [[ -x "$cmd" ]] || die "$cmd is required"
+    [[ -x "$cmd" ]] || die "$cmd is required"
 done
 [[ -e "$FILE" ]] || die "'$FILE' not found"
 
 # ---------- Target Time ----------
 if [[ -z "$TARGET_ISO" ]]; then
-  TARGET_ISO="$($DATE -u -v+10y '+%Y-%m-%dT%H:%M:%SZ')"
+    TARGET_ISO="$($DATE -u -v+10y '+%Y-%m-%dT%H:%M:%SZ')"
 fi
-TARGET_EPOCH="$($DATE -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$TARGET_ISO" '+%s' 2>/dev/null || true)"
+TARGET_EPOCH="$($DATE -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$TARGET_ISO" '+%s' 2> /dev/null || true)"
 [[ -n "$TARGET_EPOCH" ]] || die "Failed to parse target ISO datetime: $TARGET_ISO"
 TARGET_TOUCH_LOCAL="$($DATE -r "$TARGET_EPOCH" '+%Y%m%d%H%M.%S')"
 
@@ -64,17 +64,17 @@ echo ""
 
 # ---------- Date Modified ----------
 $TOUCH -mt "$TARGET_TOUCH_LOCAL" "$FILE" || true
-$MDIMPORT -f "$FILE" >/dev/null 2>&1 || true
+$MDIMPORT -f "$FILE" > /dev/null 2>&1 || true
 
 # ---------- Date Added (best effort) ----------
 if [[ "$TRY_ADDED" -eq 1 ]]; then
-  HELPER_DIR="${HOME}/.cache/rubicon_set_future_file_added_date"
-  HELPER="${HELPER_DIR}/rubicon_set_added_date_v2"
-  HELPER_SRC="${HELPER_DIR}/rubicon_set_added_date_v2.c"
-  mkdir -p "$HELPER_DIR"
-  if [[ ! -x "$HELPER" ]]; then
-    command -v cc >/dev/null || die "C compiler (cc) required; install Xcode Command Line Tools"
-    cat >"$HELPER_SRC" <<'C_EOF'
+    HELPER_DIR="${HOME}/.cache/rubicon_set_future_file_added_date"
+    HELPER="${HELPER_DIR}/rubicon_set_added_date_v2"
+    HELPER_SRC="${HELPER_DIR}/rubicon_set_added_date_v2.c"
+    mkdir -p "$HELPER_DIR"
+    if [[ ! -x "$HELPER" ]]; then
+        command -v cc > /dev/null || die "C compiler (cc) required; install Xcode Command Line Tools"
+        cat > "$HELPER_SRC" << 'C_EOF'
 #include <CoreServices/CoreServices.h>
 #include <sys/attr.h>
 #include <sys/stat.h>
@@ -128,41 +128,44 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 C_EOF
-    cc -O2 -Wall -Wextra -framework CoreServices -o "$HELPER" "$HELPER_SRC" || die "compile failed"
-  fi
-
-  if "$HELPER" "$FILE" "$TARGET_EPOCH"; then
-    # Reindex and attempt verification via mdls (Spotlight)
-    $MDIMPORT -f "$FILE" >/dev/null 2>&1 || true
-    RAW_ADDED="$($MDLS -raw -name kMDItemDateAdded "$FILE" 2>/dev/null || true)"
-    # RAW example: 2025-11-06 14:44:30 +0000
-    if [[ -n "$RAW_ADDED" && "$RAW_ADDED" != "(null)" ]]; then
-      ADDED_EPOCH="$($DATE -j -f '%Y-%m-%d %H:%M:%S %z' "$RAW_ADDED" '+%s' 2>/dev/null || true)"
-      if [[ -n "$ADDED_EPOCH" ]]; then
-        DIFF=$((ADDED_EPOCH - TARGET_EPOCH))
-        [[ $DIFF -lt 0 ]] && DIFF=$((-DIFF))
-        if [[ $DIFF -le 2 ]]; then
-          echo "✔ Date Added set (Spotlight agrees)."
-        else
-          echo "ℹ Date Added update was accepted. Spotlight metadata may take a few moments to reflect the change. Current Spotlight value: '$RAW_ADDED'."
-        fi
-      else
-        echo "ℹ Date Added update was accepted. Spotlight metadata may take a few moments to reflect the change (current value: $RAW_ADDED)."
-      fi
-    else
-      echo "ℹ Date Added update was accepted. Spotlight metadata has not yet reflected the change."
+        cc -O2 -Wall -Wextra -framework CoreServices -o "$HELPER" "$HELPER_SRC" || die "compile failed"
     fi
-  else
-    echo "⚠ Date Added could not be set (OS refused)."
-  fi
+
+    if "$HELPER" "$FILE" "$TARGET_EPOCH"; then
+        # Reindex and attempt verification via mdls (Spotlight)
+        $MDIMPORT -f "$FILE" > /dev/null 2>&1 || true
+        RAW_ADDED="$($MDLS -raw -name kMDItemDateAdded "$FILE" 2> /dev/null || true)"
+        # RAW example: 2025-11-06 14:44:30 +0000
+        if [[ -n "$RAW_ADDED" && "$RAW_ADDED" != "(null)" ]]; then
+            ADDED_EPOCH="$($DATE -j -f '%Y-%m-%d %H:%M:%S %z' "$RAW_ADDED" '+%s' 2> /dev/null || true)"
+            if [[ -n "$ADDED_EPOCH" ]]; then
+                DIFF=$((ADDED_EPOCH - TARGET_EPOCH))
+                [[ $DIFF -lt 0 ]] && DIFF=$((-DIFF))
+                if [[ $DIFF -le 2 ]]; then
+                    echo "✔ Date Added set (Spotlight agrees)."
+                else
+                    echo "ℹ Date Added update was accepted. Spotlight metadata may take a few moments to"
+                    echo "reflect the change. Current Spotlight value: '$RAW_ADDED'."
+                fi
+            else
+                echo "ℹ Date Added update was accepted. Spotlight metadata may take a few moments to"
+                echo "reflect the change (current value: $RAW_ADDED)."
+            fi
+        else
+            echo "ℹ Date Added update was accepted. Spotlight metadata has not yet reflected"
+            echo "the change."
+        fi
+    else
+        echo "⚠ Date Added could not be set (OS refused)."
+    fi
 else
-  echo "Skipping Date Added per --no-added"
+    echo "Skipping Date Added per --no-added"
 fi
 
 # ---------- Report ----------
 ACTUAL_EPOCH="$($STAT -f %m "$FILE")"
 if [[ "$ACTUAL_EPOCH" != "$TARGET_EPOCH" ]]; then
-  echo "⚠ Date Modified was clamped to $($DATE -ur "$ACTUAL_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')."
+    echo "⚠ Date Modified was clamped to $($DATE -ur "$ACTUAL_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')."
 fi
 
 echo ""
