@@ -10,6 +10,7 @@
 # - Always sets filesystem "Date Modified" (mtime) to the target instant.
 # - Best-effort set for Finder "Date Added"; on modern macOS, this is often blocked.
 # - Forces Spotlight to refresh so mdls reflects changes.
+# - Operates on a symbolic link itself rather than its target.
 #
 set -euo pipefail
 die() {
@@ -34,6 +35,14 @@ Options:
   -h, --help         Show this help and exit.
 EOF
 }
+
+# Pin to macOS/BSD binaries so GNU coreutils on PATH cannot shadow the
+# BSD-specific flags this script relies on (date -v, stat -f, touch -mt).
+readonly DATE="/bin/date"
+readonly STAT="/usr/bin/stat"
+readonly TOUCH="/usr/bin/touch"
+readonly MDLS="/usr/bin/mdls"
+readonly MDIMPORT="/usr/bin/mdimport"
 
 for arg in "$@"; do
   case "$arg" in
@@ -66,18 +75,18 @@ while [[ $# -gt 0 ]]; do
   shift || true
 done
 
-for cmd in mdls mdimport touch stat date; do
-  command -v "$cmd" >/dev/null || die "$cmd is required"
+for cmd in "$DATE" "$STAT" "$TOUCH" "$MDLS" "$MDIMPORT"; do
+  [[ -x "$cmd" ]] || die "Required macOS binary not found or not executable: $cmd"
 done
-[[ -e "$FILE" ]] || die "'$FILE' not found"
+[[ -e "$FILE" || -L "$FILE" ]] || die "'$FILE' not found"
 
 # ---------- Target Time ----------
 if [[ -z "$TARGET_ISO" ]]; then
-  TARGET_ISO="$(date -u -v+10y '+%Y-%m-%dT%H:%M:%SZ')"
+  TARGET_ISO="$("$DATE" -u -v+10y '+%Y-%m-%dT%H:%M:%SZ')"
 fi
-TARGET_EPOCH="$(date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$TARGET_ISO" '+%s' 2>/dev/null || true)"
+TARGET_EPOCH="$("$DATE" -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$TARGET_ISO" '+%s' 2>/dev/null || true)"
 [[ -n "$TARGET_EPOCH" ]] || die "Failed to parse target ISO datetime: $TARGET_ISO"
-TARGET_TOUCH_LOCAL="$(date -r "$TARGET_EPOCH" '+%Y%m%d%H%M.%S')"
+TARGET_TOUCH_LOCAL="$("$DATE" -r "$TARGET_EPOCH" '+%Y%m%d%H%M.%S')"
 
 echo "Target (UTC):  $TARGET_ISO"
 echo "Target epoch:  $TARGET_EPOCH"
@@ -85,8 +94,13 @@ echo "File:          $FILE"
 echo ""
 
 # ---------- Date Modified ----------
-touch -mt "$TARGET_TOUCH_LOCAL" "$FILE" || true
-mdimport -f "$FILE" >/dev/null 2>&1 || true
+# For a symbolic link, set mtime on the link itself (-h) instead of its target.
+if [[ -L "$FILE" ]]; then
+  "$TOUCH" -h -mt "$TARGET_TOUCH_LOCAL" "$FILE" || true
+else
+  "$TOUCH" -mt "$TARGET_TOUCH_LOCAL" "$FILE" || true
+fi
+"$MDIMPORT" -f "$FILE" >/dev/null 2>&1 || true
 
 # ---------- Date Added (best effort) ----------
 if [[ "$TRY_ADDED" -eq 1 ]]; then
@@ -143,7 +157,16 @@ int main(int argc, char *argv[]) {
     reqbuf.added.tv_sec = (time_t)epoch;
     reqbuf.added.tv_nsec = 0;
 
-    if (setattrlist(path, &request, &reqbuf, sizeof(reqbuf), 0) != 0) {
+    /* If the path is a symbolic link, operate on the link itself rather
+     * than following it to the target.
+     */
+    int options = 0;
+    struct stat st;
+    if (lstat(path, &st) == 0 && S_ISLNK(st.st_mode)) {
+        options |= FSOPT_NOFOLLOW;
+    }
+
+    if (setattrlist(path, &request, &reqbuf, sizeof(reqbuf), options) != 0) {
         perror("setattrlist(ATTR_CMN_ADDEDTIME) failed");
         return 1;
     }
@@ -162,11 +185,11 @@ C_EOF
 
   if "$HELPER" "$FILE" "$TARGET_EPOCH"; then
     # Reindex and attempt verification via mdls (Spotlight)
-    mdimport -f "$FILE" >/dev/null 2>&1 || true
-    RAW_ADDED="$(mdls -raw -name kMDItemDateAdded "$FILE" 2>/dev/null || true)"
+    "$MDIMPORT" -f "$FILE" >/dev/null 2>&1 || true
+    RAW_ADDED="$("$MDLS" -raw -name kMDItemDateAdded "$FILE" 2>/dev/null || true)"
     # RAW example: 2025-11-06 14:44:30 +0000
     if [[ -n "$RAW_ADDED" && "$RAW_ADDED" != "(null)" ]]; then
-      ADDED_EPOCH="$(date -j -f '%Y-%m-%d %H:%M:%S %z' "$RAW_ADDED" '+%s' 2>/dev/null || true)"
+      ADDED_EPOCH="$("$DATE" -j -f '%Y-%m-%d %H:%M:%S %z' "$RAW_ADDED" '+%s' 2>/dev/null || true)"
       if [[ -n "$ADDED_EPOCH" ]]; then
         DIFF=$((ADDED_EPOCH - TARGET_EPOCH))
         [[ $DIFF -lt 0 ]] && DIFF=$((-DIFF))
@@ -189,15 +212,20 @@ else
 fi
 
 # ---------- Report ----------
-ACTUAL_EPOCH="$(stat -f %m "$FILE")"
+ACTUAL_EPOCH="$("$STAT" -f %m "$FILE")"
 if [[ "$ACTUAL_EPOCH" != "$TARGET_EPOCH" ]]; then
-  echo "⚠ Date Modified was clamped to $(date -ur "$ACTUAL_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')."
+  echo "⚠ Date Modified was clamped to $("$DATE" -ur "$ACTUAL_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')."
 fi
 
 echo ""
+if [[ -L "$FILE" ]]; then
+  echo "ℹ '$FILE' is a symbolic link; Date Added and mtime were set on the link itself."
+  echo "  (Spotlight/mdls below reflects the link's target.)"
+  echo ""
+fi
 echo "Spotlight (mdls):"
-mdls -name kMDItemDateAdded -name kMDItemContentModificationDate "$FILE" | sed 's/^/  /'
+"$MDLS" -name kMDItemDateAdded -name kMDItemContentModificationDate "$FILE" | sed 's/^/  /'
 echo ""
 echo "Filesystem (stat):"
 echo "  mtime (epoch): $ACTUAL_EPOCH"
-echo "  mtime (UTC) : $(date -ur "$ACTUAL_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')"
+echo "  mtime (UTC) : $("$DATE" -ur "$ACTUAL_EPOCH" '+%Y-%m-%dT%H:%M:%SZ')"
