@@ -4,7 +4,7 @@
 Latest `main` and the most recent release.
 
 ## Reporting a Vulnerability
-Email: security@daxdavis.com (placeholder). Include steps to reproduce, impact, and any CVE references.
+Email: security@daxdavis.com. Include steps to reproduce, impact, and any CVE references.
 
 We prefer responsible disclosure. We’ll acknowledge receipt within 5 business days and keep you updated on status.
 

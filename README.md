@@ -56,7 +56,7 @@ rubicon-set-date --help
 
 ## Badges
 
-[![CI](https://github.com/rubicon/rubicon_set_future_file_added_date/actions/workflows/ci.yml/badge.svg)](https://github.com/rubicon/rubicon_set_future_file_added_date/actions/workflows/ci.yml)
+[![CI](https://github.com/rubicon/rubicon_set_future_file_added_date/actions/workflows/ci.yaml/badge.svg)](https://github.com/rubicon/rubicon_set_future_file_added_date/actions/workflows/ci.yaml)
 [![Release](https://img.shields.io/github/v/release/rubicon/rubicon_set_future_file_added_date)](https://github.com/rubicon/rubicon_set_future_file_added_date/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Last Commit](https://img.shields.io/github/last-commit/rubicon/rubicon_set_future_file_added_date)](https://github.com/rubicon/rubicon_set_future_file_added_date/commits)

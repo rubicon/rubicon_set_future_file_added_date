@@ -17,8 +17,38 @@ die() {
   exit 1
 }
 
+usage() {
+  cat <<'EOF'
+Usage: rubicon_set_future_file_added_date.sh <file> [--date "YYYY-MM-DDTHH:MM:SSZ"] [--no-added]
+
+Set a file's Finder "Date Added" (best-effort) and filesystem "Date Modified" (mtime)
+to a target instant on macOS.
+
+Arguments:
+  <file>             Path to the target file (required).
+
+Options:
+  --date <ISO8601>   Target instant in UTC, e.g. 2035-11-06T14:29:09Z.
+                     Defaults to now + 10 years if omitted.
+  --no-added         Only set Date Modified; skip the Date Added helper (no C compiler needed).
+  -h, --help         Show this help and exit.
+EOF
+}
+
+for arg in "$@"; do
+  case "$arg" in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  esac
+done
+
 [[ $# -ge 1 ]] || die "Usage: $0 <file> [--date ISO8601_UTC] [--no-added]"
 FILE=$1
+if [[ "$FILE" == -* ]]; then
+  die "First argument must be a file path, got option '$FILE'. See --help."
+fi
 shift || true
 TRY_ADDED=1
 TARGET_ISO=""
@@ -64,9 +94,9 @@ if [[ "$TRY_ADDED" -eq 1 ]]; then
   HELPER="${HELPER_DIR}/rubicon_set_added_date_v2"
   HELPER_SRC="${HELPER_DIR}/rubicon_set_added_date_v2.c"
   mkdir -p "$HELPER_DIR"
-  if [[ ! -x "$HELPER" ]]; then
-    command -v cc >/dev/null || die "C compiler (cc) required; install Xcode Command Line Tools"
-    cat >"$HELPER_SRC" <<'C_EOF'
+  chmod 700 "$HELPER_DIR"
+  HELPER_SRC_NEW="$(mktemp "${TMPDIR:-/tmp}/rubicon_added_src.XXXXXX")"
+  cat >"$HELPER_SRC_NEW" <<'C_EOF'
 #include <CoreServices/CoreServices.h>
 #include <sys/attr.h>
 #include <sys/stat.h>
@@ -120,6 +150,13 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 C_EOF
+  if ! cmp -s "$HELPER_SRC_NEW" "$HELPER_SRC" 2>/dev/null; then
+    mv -f "$HELPER_SRC_NEW" "$HELPER_SRC"
+  else
+    rm -f "$HELPER_SRC_NEW"
+  fi
+  if [[ ! -x "$HELPER" || "$HELPER_SRC" -nt "$HELPER" ]]; then
+    command -v cc >/dev/null || die "C compiler (cc) required; install Xcode Command Line Tools"
     cc -O2 -Wall -Wextra -framework CoreServices -o "$HELPER" "$HELPER_SRC" || die "compile failed"
   fi
 
