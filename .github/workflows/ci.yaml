@@ -13,7 +13,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 0
       - run: brew install shellcheck || true
@@ -25,11 +25,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 0
       - run: brew install shfmt || true
-      - run: shfmt -w .
+      - run: shfmt -d .
 
   test:
     name: Tests (bats)
@@ -37,11 +37,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 0
       - run: brew install bats-core || true
-      - run: bats test || echo "⚠️ No tests found — skipping."
+      - run: bats -r test
 
   build:
     name: Build and Test
@@ -50,7 +50,7 @@ jobs:
       contents: read
     needs: [lint, format, test]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 0
       - run: echo "✅ All checks passed. Build complete."
