@@ -37,6 +37,7 @@ Install tools: `brew install shellcheck shfmt bats-core`
 
 - `--date` — ISO 8601 UTC, e.g. `2035-11-06T14:29:09Z`. If omitted, defaults to **now + 10 years** (kept under 2038).
 - `--no-added` — set only Date Modified (mtime); skip the Date Added helper (no compiler needed).
+- `-h`, `--help` — print usage and exit.
 
 ## Testing (manual smoke)
 
@@ -54,18 +55,23 @@ Capture before/after `mdls`/`stat` output in PR notes.
 - `#!/bin/bash`, `set -euo pipefail`, two-space indentation.
 - Functions `lower_snake_case`; constants UPPERCASE. Quote variables unless they are numeric counters.
 - Single-quoted here-docs for literal content (mirrors the embedded C block).
-- Run `make fmt` (shfmt `-i 2 -ci`) and `make lint` before committing.
+- Run `make fmt` (`shfmt -w .`, driven by `.editorconfig`: 2-space, no `-ci`) and `make lint` before committing. Don't add `-ci` — it reindents `case` arms and fails the `shfmt -d` gate.
 
 ## Gotchas
 
 - **Date Added is best-effort.** On modern macOS it is often blocked; the script reports the actual result. Note the macOS build in reports so OS regressions can be tracked.
-- **C helper requires Xcode Command Line Tools** (`cc`). It is compiled on first run (unless `--no-added`) to `~/.cache/rubicon_set_future_file_added_date/rubicon_set_added_date_v2` and reused across runs. Missing toolchain is the most common early failure.
+- **C helper requires Xcode Command Line Tools** (`cc`). Compiled on first run (unless `--no-added`) to `~/.cache/rubicon_set_future_file_added_date/rubicon_set_added_date_v2` and reused; it auto-rebuilds when the embedded C changes (content compare + `-nt`), so no manual cache-clearing is needed. Missing toolchain is the most common early failure.
 - **macOS may clamp impossible future mtimes**; the script reports the clamped value.
 - **Spotlight updates are async**; the script runs `mdimport -f` to force reindex before verifying.
+- **Verification:** `stat -f %m` is authoritative for mtime. `mdls`/Spotlight lags and, for **iCloud Drive** files (`com~apple~CloudDocs`), tracks iCloud's own dates — it won't reflect the mtime change. Date Added is confirmed blocked on macOS 26.x.
+- The script pins `date`/`stat`/`touch`/`mdls`/`mdimport` to absolute macOS paths and acts on symlinks directly (`touch -h`, `FSOPT_NOFOLLOW`) — don't reintroduce bare command names.
 - Required tools checked at startup: `mdls`, `mdimport`, `touch`, `stat`, `date`.
 
 ## Commit & PR
 
 - Conventional Commits, imperative mood; automated releases via release-please.
+- **`main` is protected:** no direct pushes — issue → feature branch → PR; all CI checks (shellcheck, `shfmt -d`, bats) and one review must pass. `shfmt -d` fails on any diff, so `make fmt` must leave the tree clean before pushing.
+- **GitHub Actions are SHA-pinned** (`uses: owner/action@<sha> # vX.Y.Z`), maintained by Dependabot — bump the SHA; never revert to a mutable tag.
+- **release-please** needs *Settings → Actions → "Allow GitHub Actions to create and approve pull requests"* enabled plus the `RELEASE_PLEASE_APP_ID`/`RELEASE_PLEASE_APP_KEY` App-token secrets (signed release commits). If release PRs stop appearing, check that setting first.
 - Reference issues (e.g. `Refs #42`) and record the macOS version used for validation.
 - PRs: summary, test commands with output snippets, observed limitations. See [CONTRIBUTING.md](CONTRIBUTING.md).
