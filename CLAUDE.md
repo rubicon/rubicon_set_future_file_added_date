@@ -37,6 +37,7 @@ Install tools: `brew install shellcheck shfmt bats-core`
 
 - `--date` — ISO 8601 UTC, e.g. `2035-11-06T14:29:09Z`. If omitted, defaults to **now + 10 years** (kept under 2038).
 - `--no-added` — set only Date Modified (mtime); skip the Date Added helper (no compiler needed).
+- `-h`, `--help` — print usage and exit.
 
 ## Testing (manual smoke)
 
@@ -54,7 +55,7 @@ Capture before/after `mdls`/`stat` output in PR notes.
 - `#!/bin/bash`, `set -euo pipefail`, two-space indentation.
 - Functions `lower_snake_case`; constants UPPERCASE. Quote variables unless they are numeric counters.
 - Single-quoted here-docs for literal content (mirrors the embedded C block).
-- Run `make fmt` (shfmt `-i 2 -ci`) and `make lint` before committing.
+- Run `make fmt` (`shfmt -w .`, driven by `.editorconfig`: 2-space, no `-ci`) and `make lint` before committing. Don't add `-ci` — it reindents `case` arms and fails the `shfmt -d` gate.
 
 ## Gotchas
 
