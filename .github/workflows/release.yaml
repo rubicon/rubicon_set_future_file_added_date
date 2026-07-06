@@ -12,14 +12,27 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
+      # App credentials come from 1Password at runtime (single source of truth in
+      # the Automation vault). Only OP_SERVICE_ACCOUNT_TOKEN lives as a repo secret;
+      # the app id + private key never leave 1Password, so the shared App key is
+      # rotated in one place instead of fanned out across repos as secrets.
+      - name: Load app credentials from 1Password
+        id: op
+        uses: 1password/load-secrets-action@3a12b0ab99d9cd590a3e9b5a90ea017210ed9556 # v4.0.1
+        with:
+          export-env: false
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          RELEASE_PLEASE_APP_ID: 'op://Automation/rubicon-release-please-private-key/app id'
+          RELEASE_PLEASE_APP_KEY: 'op://Automation/rubicon-release-please-private-key/private key'
       # Mint a token from the rubicon-release-please GitHub App so the release
       # PR is App-authored and its commit is signed/verified — releases then
       # merge without an admin bypass of the signed-commit rule.
       - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
         id: app-token
         with:
-          app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
+          app-id: ${{ steps.op.outputs.RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ steps.op.outputs.RELEASE_PLEASE_APP_KEY }}
       - uses: google-github-actions/release-please-action@e4dc86ba9405554aeba3c6bb2d169500e7d3b4ee # v4
         with:
           token: ${{ steps.app-token.outputs.token }}
