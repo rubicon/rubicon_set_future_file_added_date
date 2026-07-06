@@ -28,7 +28,7 @@ jobs:
       # Mint a token from the rubicon-release-please GitHub App so the release
       # PR is App-authored and its commit is signed/verified — releases then
       # merge without an admin bypass of the signed-commit rule.
-      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
         with:
           app-id: ${{ steps.op.outputs.RELEASE_PLEASE_APP_ID }}
