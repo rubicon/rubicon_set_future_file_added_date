@@ -72,6 +72,6 @@ Capture before/after `mdls`/`stat` output in PR notes.
 - Conventional Commits, imperative mood; automated releases via release-please.
 - **`main` is protected:** no direct pushes — issue → feature branch → PR; all CI checks (shellcheck, `shfmt -d`, bats) and one review must pass. `shfmt -d` fails on any diff, so `make fmt` must leave the tree clean before pushing.
 - **GitHub Actions are SHA-pinned** (`uses: owner/action@<sha> # vX.Y.Z`), maintained by Dependabot — bump the SHA; never revert to a mutable tag.
-- **release-please** needs *Settings → Actions → "Allow GitHub Actions to create and approve pull requests"* enabled plus the `RELEASE_PLEASE_APP_ID`/`RELEASE_PLEASE_APP_KEY` App-token secrets (signed release commits). If release PRs stop appearing, check that setting first.
+- **release-please** needs *Settings → Actions → "Allow GitHub Actions to create and approve pull requests"* enabled plus the `OP_SERVICE_ACCOUNT_TOKEN` secret. The `rubicon-release-please` App id and private key are loaded from the shared 1Password `Automation` vault at runtime (via `1password/load-secrets-action`) and minted into a signed App token, so no App-key secrets live in the repo. If release PRs stop appearing, check that setting first.
 - Reference issues (e.g. `Refs #42`) and record the macOS version used for validation.
 - PRs: summary, test commands with output snippets, observed limitations. See [CONTRIBUTING.md](CONTRIBUTING.md).
