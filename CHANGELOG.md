@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented here, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [1.0.1](https://github.com/rubicon/rubicon_set_future_file_added_date/compare/v1.0.0...v1.0.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* **ci:** repair the broken release-please 1Password reference ([#27](https://github.com/rubicon/rubicon_set_future_file_added_date/issues/27)) ([b2bc498](https://github.com/rubicon/rubicon_set_future_file_added_date/commit/b2bc498947259bc03ae17c0010be462cec172644)), closes [#26](https://github.com/rubicon/rubicon_set_future_file_added_date/issues/26)
+
 ## 1.0.0 (2026-07-02)
 
 
